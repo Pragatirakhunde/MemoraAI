@@ -1,0 +1,36 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Environment
+.env
+*.env
+
+# Logs
+logs/
+*.log
+backend/logs/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python cache
+.pytest_cache/
+.mypy_cache/
+
+# Build
+build/
+dist/
+
+# Coverage
+.coverage
+htmlcov/
