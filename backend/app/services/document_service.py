@@ -3,6 +3,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.models.data_source_file import DataSourceFile
+from app.models.document import Document
 from app.repositories.document_repository import (
     DocumentRepository,
 )
@@ -17,7 +18,7 @@ class DocumentService:
         data_source_id: int,
         source_file: DataSourceFile,
         content: str,
-    ) -> None:
+    ) -> Document:
 
         document = DocumentRepository.get_by_source_file(
             db,
@@ -30,7 +31,7 @@ class DocumentService:
 
         if document is None:
 
-            DocumentRepository.create(
+            document = DocumentRepository.create(
                 db=db,
                 organization_id=organization_id,
                 data_source_id=data_source_id,
@@ -44,7 +45,7 @@ class DocumentService:
 
         else:
 
-            DocumentRepository.update(
+            document = DocumentRepository.update(
                 db=db,
                 document=document,
                 content=content,
@@ -52,12 +53,13 @@ class DocumentService:
                 title=title,
             )
 
+        return document
+
     @staticmethod
     def get_documents(
         db: Session,
         organization_id: int,
     ):
-
         return DocumentRepository.get_all(
             db,
             organization_id,
@@ -69,7 +71,6 @@ class DocumentService:
         document_id: int,
         organization_id: int,
     ):
-
         return DocumentRepository.get_by_id(
             db,
             document_id,

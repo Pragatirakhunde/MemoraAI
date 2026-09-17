@@ -1,13 +1,26 @@
 # TechNova Solutions
 
-TechNova Solutions develops enterprise software products.
+
+
+TechNova develops enterprise software.  
+
 
 ## Projects
 
+
 - Inventory Management
 - Customer Portal
-- HR Management
+
+
 
 ## Technology
 
-The organization uses Python, React, PostgreSQL and Redis.
+Python
+React
+PostgreSQL
+Redis
+
+## Architecture
+
+The backend uses FastAPI and PostgreSQL.
+Redis is used for background jobs.

@@ -6,24 +6,34 @@ from sqlalchemy.orm import Session
 
 from app.connectors.factory import get_connector
 from app.models.data_source import DataSource
+
 from app.repositories.data_source_file_repository import (
     DataSourceFileRepository,
 )
+
 from app.repositories.document_repository import (
     DocumentRepository,
 )
+
 from app.repositories.sync_job_repository import (
     SyncJobRepository,
 )
+
 from app.services.document_service import (
     DocumentService,
+)
+
+from app.services.document_processing_service import (
+    DocumentProcessingService,
 )
 
 
 class SyncService:
 
     @staticmethod
-    def calculate_checksum(content: str) -> str:
+    def calculate_checksum(
+        content: str,
+    ) -> str:
 
         return hashlib.sha256(
             content.encode("utf-8")
@@ -53,7 +63,7 @@ class SyncService:
                 data_source.config,
             )
 
-            # Git repositories must be updated
+            # Update Git repository
             if data_source.source_type == "git":
                 connector.sync_repository()
 
@@ -70,8 +80,10 @@ class SyncService:
                     file.path
                 )
 
-                checksum = SyncService.calculate_checksum(
-                    content
+                checksum = (
+                    SyncService.calculate_checksum(
+                        content
+                    )
                 )
 
                 file_path = Path(file.path)
@@ -92,9 +104,9 @@ class SyncService:
 
                 should_process = False
 
-                # ---------------------------------
+                # -----------------------------
                 # NEW FILE
-                # ---------------------------------
+                # -----------------------------
                 if existing is None:
 
                     existing = (
@@ -112,9 +124,9 @@ class SyncService:
 
                     should_process = True
 
-                # ---------------------------------
+                # -----------------------------
                 # MODIFIED FILE
-                # ---------------------------------
+                # -----------------------------
                 elif (
                     existing.checksum != checksum
                     or existing.size != file.size
@@ -132,9 +144,9 @@ class SyncService:
 
                     should_process = True
 
-                # ---------------------------------
+                # -----------------------------
                 # UNCHANGED FILE
-                # ---------------------------------
+                # -----------------------------
                 else:
 
                     DataSourceFileRepository.mark_seen(
@@ -142,24 +154,34 @@ class SyncService:
                         existing,
                     )
 
-                # ---------------------------------
-                # DOCUMENT INGESTION
-                # ---------------------------------
+                # -----------------------------
+                # DOCUMENT PROCESSING
+                # -----------------------------
                 if should_process:
 
-                    DocumentService.ingest_file(
+                    document = (
+                        DocumentService.ingest_file(
+                            db=db,
+                            organization_id=(
+                                data_source.organization_id
+                            ),
+                            data_source_id=data_source.id,
+                            source_file=existing,
+                            content=content,
+                        )
+                    )
+
+                    # Automatically process
+                    DocumentProcessingService.process_document(
                         db=db,
-                        organization_id=data_source.organization_id,
-                        data_source_id=data_source.id,
-                        source_file=existing,
-                        content=content,
+                        document=document,
                     )
 
                     files_processed += 1
 
-            # -------------------------------------
-            # DETECT DELETED FILES
-            # -------------------------------------
+            # -----------------------------
+            # DELETED FILE DETECTION
+            # -----------------------------
 
             existing_files = (
                 DataSourceFileRepository.get_all_by_source(
@@ -194,9 +216,9 @@ class SyncService:
                             document,
                         )
 
-            # -------------------------------------
+            # -----------------------------
             # SYNC SUCCESS
-            # -------------------------------------
+            # -----------------------------
 
             job = SyncJobRepository.update(
                 db,
@@ -207,7 +229,9 @@ class SyncService:
             )
 
             data_source.status = "active"
-            data_source.last_synced_at = datetime.utcnow()
+            data_source.last_synced_at = (
+                datetime.utcnow()
+            )
 
             db.commit()
             db.refresh(data_source)

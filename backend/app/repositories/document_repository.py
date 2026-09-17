@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.document import Document
+from datetime import datetime
 
 
 class DocumentRepository:
@@ -109,3 +110,22 @@ class DocumentRepository:
 
         db.commit()
         db.refresh(document)
+
+    @staticmethod
+    def update_processing_status(
+        db: Session,
+        document: Document,
+        status: str,
+        error: str | None = None,
+    ) -> Document:
+
+        document.processing_status = status
+        document.processing_error = error
+
+        if status == "completed":
+            document.processed_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(document)
+
+        return document

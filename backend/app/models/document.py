@@ -21,6 +21,11 @@ class Document(Base):
             "status IN ('active', 'deleted')",
             name="check_document_status",
         ),
+        CheckConstraint(
+            "processing_status IN "
+            "('pending', 'processing', 'completed', 'failed')",
+            name="check_processing_status",
+        ),
     )
 
     id: Mapped[int] = mapped_column(
@@ -83,6 +88,22 @@ class Document(Base):
         String(20),
         default="active",
         nullable=False,
+    )
+
+    processing_status: Mapped[str] = mapped_column(
+        String(20),
+        default="pending",
+        nullable=False,
+    )
+
+    processing_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
