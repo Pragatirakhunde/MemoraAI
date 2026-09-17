@@ -1,0 +1,66 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: eme-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+
+  neo4j:
+    image: neo4j:5
+    container_name: eme-neo4j
+    restart: unless-stopped
+
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: eme-qdrant
+    restart: unless-stopped
+
+    ports:
+      - "${QDRANT_PORT}:6333"
+
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+
+  redis:
+    image: redis:7
+    container_name: eme-redis
+    restart: unless-stopped
+
+    ports:
+      - "${REDIS_PORT}:6379"
+
+    volumes:
+      - redis_data:/data
+
+
+volumes:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:
+  qdrant_data:
+  redis_data:
