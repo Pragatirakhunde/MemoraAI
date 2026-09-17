@@ -129,3 +129,27 @@ class DocumentRepository:
         db.refresh(document)
 
         return document
+
+    @staticmethod
+    def get_by_ids(
+        db: Session,
+        document_ids: list[int],
+        organization_id: int,
+    ) -> dict[int, Document]:
+
+        if not document_ids:
+            return {}
+
+        statement = select(Document).where(
+            Document.id.in_(document_ids),
+            Document.organization_id == organization_id,
+        )
+
+        documents = list(
+            db.scalars(statement).all()
+        )
+
+        return {
+            document.id: document
+            for document in documents
+        }

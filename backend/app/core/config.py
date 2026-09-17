@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     QDRANT_HOST: str
     QDRANT_PORT: int = 6333
+    EMBEDDING_MODEL: str = "BAAI/bge-m3"
 
     REDIS_HOST: str
     REDIS_PORT: int = 6379
