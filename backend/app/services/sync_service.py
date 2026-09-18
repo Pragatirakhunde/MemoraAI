@@ -43,12 +43,14 @@ class SyncService:
     def run_sync(
         db: Session,
         data_source: DataSource,
+        job=None,
     ):
 
-        job = SyncJobRepository.create(
-            db,
-            data_source.id,
-        )
+        if job is None:
+            job = SyncJobRepository.create(
+                db,
+                data_source.id,
+            )
 
         try:
 

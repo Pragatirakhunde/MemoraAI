@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
 
+    REDIS_URL: str = "redis://localhost:6379/0"
+    SYNC_INTERVAL_SECONDS: int = 900
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

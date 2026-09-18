@@ -30,3 +30,10 @@ class SearchResult(BaseModel):
     title: str
     content: str
     reference: SearchReference
+
+
+class FusedContextResponse(BaseModel):
+    source_type: str
+    score: float
+    content: str
+    reference: dict

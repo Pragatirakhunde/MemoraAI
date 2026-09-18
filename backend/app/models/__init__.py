@@ -5,6 +5,7 @@ from app.models.sync_job import SyncJob
 from app.models.data_source_file import DataSourceFile
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.conversation import Conversation, Message
 
 __all__ = [
     "Organization",
@@ -14,4 +15,6 @@ __all__ = [
     "DataSourceFile",
     "Document",
     "DocumentChunk",
+    "Conversation",
+    "Message",
 ]

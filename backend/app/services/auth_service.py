@@ -2,9 +2,11 @@ from sqlalchemy.orm import Session
 
 from app.core.security import (
     create_access_token,
+    hash_password,
     verify_password,
 )
 from app.repositories.user_repository import UserRepository
+from app.models.user import User
 
 
 class AuthService:
@@ -15,7 +17,6 @@ class AuthService:
         email: str,
         password: str,
     ):
-
         user = UserRepository.get_by_email(
             db,
             email,
@@ -40,6 +41,36 @@ class AuthService:
         )
 
         return token
+
+    @staticmethod
+    def register(
+        db: Session,
+        name: str,
+        email: str,
+        password: str,
+    ):
+        existing_user = UserRepository.get_by_email(
+            db,
+            email,
+        )
+
+        if existing_user is not None:
+            return None
+
+        user = User(
+            organization_id=1,
+            name=name.strip(),
+            email=email.lower().strip(),
+            password_hash=hash_password(password),
+            role="employee",
+            is_active=True,
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        return user
 
     @staticmethod
     def get_user(

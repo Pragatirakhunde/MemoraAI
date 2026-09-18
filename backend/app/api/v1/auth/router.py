@@ -7,6 +7,7 @@ from app.models.user import User
 from app.schemas.auth import (
     CurrentUserResponse,
     LoginRequest,
+    RegisterRequest,
     TokenResponse,
 )
 from app.services.auth_service import AuthService
@@ -16,6 +17,31 @@ router = APIRouter(
     prefix="/auth",
     tags=["Authentication"],
 )
+
+
+@router.post(
+    "/register",
+    response_model=CurrentUserResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register(
+    data: RegisterRequest,
+    db: Session = Depends(get_db),
+):
+    user = AuthService.register(
+        db=db,
+        name=data.name,
+        email=data.email,
+        password=data.password,
+    )
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email is already registered.",
+        )
+
+    return user
 
 
 @router.post(

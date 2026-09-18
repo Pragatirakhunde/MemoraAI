@@ -9,7 +9,11 @@ from app.api.v1.data_sources import router as data_sources_router
 from app.api.v1.sync import router as sync_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.search import router as search_router
-
+from app.api.v1.graph import router as graph_router
+from app.api.v1.retrieval import router as retrieval_router
+from app.api.v1.ai.router import router as ai_router
+from app.api.v1.graph import router as graph_router
+from app.api.v1.admin import router as admin_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -22,3 +26,8 @@ api_router.include_router(data_sources_router)
 api_router.include_router(sync_router)
 api_router.include_router(documents_router)
 api_router.include_router(search_router)
+api_router.include_router(graph_router)
+api_router.include_router(retrieval_router)
+api_router.include_router(ai_router)
+api_router.include_router(graph_router)
+api_router.include_router(admin_router)
