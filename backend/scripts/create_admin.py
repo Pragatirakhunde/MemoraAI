@@ -22,6 +22,7 @@ def create_admin():
             email="admin@technova.com",
             password_hash=hash_password("Admin@123"),
             role="admin",
+            approval_status="APPROVED",
             is_active=True,
         )
 

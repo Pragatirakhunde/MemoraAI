@@ -16,6 +16,9 @@ from app.services.document_processing_service import (
     DocumentProcessingService,
 )
 from app.services.document_service import DocumentService
+from app.services.authorization_scope_service import (
+    AuthorizationScopeService,
+)
 
 
 router = APIRouter(
@@ -32,9 +35,15 @@ def get_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_employee),
 ):
-    return DocumentService.get_documents(
-        db,
-        current_user.organization_id,
+    scope = AuthorizationScopeService.get_scope(
+        db=db,
+        current_user=current_user,
+    )
+
+    return DocumentService.get_accessible_documents(
+        db=db,
+        organization_id=scope.organization_id,
+        project_ids=scope.project_ids,
     )
 
 
@@ -47,10 +56,16 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_employee),
 ):
-    document = DocumentService.get_document(
-        db,
-        document_id,
-        current_user.organization_id,
+    scope = AuthorizationScopeService.get_scope(
+        db=db,
+        current_user=current_user,
+    )
+
+    document = DocumentService.get_accessible_document(
+        db=db,
+        document_id=document_id,
+        organization_id=scope.organization_id,
+        project_ids=scope.project_ids,
     )
 
     if document is None:
@@ -102,10 +117,16 @@ def get_document_chunks(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_employee),
 ):
-    document = DocumentService.get_document(
-        db,
-        document_id,
-        current_user.organization_id,
+    scope = AuthorizationScopeService.get_scope(
+        db=db,
+        current_user=current_user,
+    )
+
+    document = DocumentService.get_accessible_document(
+        db=db,
+        document_id=document_id,
+        organization_id=scope.organization_id,
+        project_ids=scope.project_ids,
     )
 
     if document is None:

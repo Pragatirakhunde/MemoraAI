@@ -187,3 +187,20 @@ def schedule_active_data_sources():
     finally:
 
         db.close()
+
+@celery_app.task(name="app.workers.tasks.codemind_index_repository_task")
+def codemind_index_repository_task(repository_id: int):
+    from app.models.code_repository import CodeRepository
+    from app.codemind.services.repository_service import CodeRepositoryService
+    from app.codemind.services.indexing_service import CodeMindIndexingService
+    db = SessionLocal()
+    try:
+        repository = db.get(CodeRepository, repository_id)
+        if repository is None:
+            return {"status": "failed", "message": "Repository not found"}
+        CodeRepositoryService.sync_provider(repository)
+        return {"status": "completed", **CodeMindIndexingService(db).index_repository(repository)}
+    except Exception as exc:
+        return {"status": "failed", "message": str(exc)}
+    finally:
+        db.close()

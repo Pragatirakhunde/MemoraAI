@@ -17,6 +17,9 @@ export interface User {
     email: string;
     role: string;
     organization_id: number;
+    department_id?: number | null;
+    approval_status?: string;
+    is_active?: boolean;
 }
 
 

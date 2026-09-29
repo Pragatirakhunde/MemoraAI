@@ -24,6 +24,7 @@ import {
 import {
     getConversations,
 } from "../../services/api/conversation";
+import { getMyProjects } from "../../services/api/projects";
 
 import type {
     Conversation,
@@ -34,6 +35,8 @@ function EmployeeDashboard() {
 
     const { user } = useAuth();
 
+    const [projects, setProjects] = useState<any[]>([]);
+
     const [conversations, setConversations] =
         useState<Conversation[]>([]);
 
@@ -43,32 +46,22 @@ function EmployeeDashboard() {
 
     useEffect(() => {
 
-        const loadConversations = async () => {
-
+        const loadDashboardData = async () => {
             try {
-
-                const data =
-                    await getConversations();
-
-                setConversations(
-                    data.slice(0, 5)
-                );
-
+                const [conversationData, projectData] = await Promise.all([
+                    getConversations(),
+                    getMyProjects(),
+                ]);
+                setConversations(conversationData.slice(0, 5));
+                setProjects(projectData);
             } catch (error) {
-
-                console.error(
-                    "Failed to load conversations:",
-                    error
-                );
-
+                console.error("Failed to load employee dashboard:", error);
             } finally {
-
                 setLoading(false);
-
             }
         };
 
-        loadConversations();
+        loadDashboardData();
 
     }, []);
 
@@ -206,6 +199,13 @@ function EmployeeDashboard() {
 
             </div>
 
+
+            <div className="rounded-xl border bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Assigned Projects</h2><p className="mt-1 text-sm text-slate-500">Projects available to your account.</p></div><button onClick={() => openPage("/codemind")} className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white">Open CodeMind</button></div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {projects.length === 0 ? <p className="text-sm text-slate-500">No projects assigned yet.</p> : projects.map(project => <div key={project.id} className="rounded-lg border p-4"><div className="font-medium">{project.name}</div><div className="mt-1 text-xs text-slate-500">{project.description || "No description"}</div></div>)}
+                </div>
+            </div>
 
             {/* =========================================
                 Recent Conversations

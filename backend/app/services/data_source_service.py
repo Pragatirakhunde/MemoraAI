@@ -4,6 +4,9 @@ from app.repositories.data_source_repository import (
     DataSourceRepository,
 )
 from app.schemas.data_source import DataSourceCreate
+from app.repositories.project_repository import (
+    ProjectRepository,
+)
 
 
 class DataSourceService:
@@ -25,14 +28,33 @@ class DataSourceService:
                 "Unsupported data source type"
             )
 
+        if data.project_id is not None:
+
+            project = ProjectRepository.get_by_id_and_org(
+                db=db,
+                project_id=data.project_id,
+                organization_id=organization_id,
+            )
+
+            if project is None:
+                raise ValueError(
+                    "Project not found in your organization"
+                )
+
+            if project.status != "active":
+                raise ValueError(
+                    "Cannot attach data source to an archived project"
+                )
+
         return DataSourceRepository.create(
             db=db,
             organization_id=organization_id,
+            project_id=data.project_id,
             name=data.name,
             source_type=data.source_type,
             config=data.config,
         )
-
+    
     @staticmethod
     def get_all(
         db: Session,

@@ -1,5 +1,10 @@
-function Organization() {
-    return <h1>Organization Setup</h1>;
-}
+import { useEffect, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { getOrganizationAdmin, updateOrganizationAdmin } from "../../services/api/admin";
 
-export default Organization;
+export default function Organization(){
+ const {user}=useAuth(); const [org,setOrg]=useState<any>(null); const [message,setMessage]=useState(""); const [error,setError]=useState("");
+ useEffect(()=>{if(user){getOrganizationAdmin(user.organization_id).then(setOrg).catch(e=>setError(e?.response?.data?.detail||"Unable to load organization"));}},[user]);
+ if(!org) return <div className="p-6">Loading organization...</div>;
+ return <div className="space-y-6"><div><h1 className="text-3xl font-bold">Organization</h1><p className="mt-1 text-sm text-slate-500">Your organization profile and shared context.</p></div>{(error||message)&&<div className={`rounded-lg border p-3 text-sm ${error?"border-red-200 bg-red-50 text-red-700":"border-green-200 bg-green-50 text-green-700"}`}>{error||message}</div>}<div className="rounded-xl border bg-white p-6 shadow-sm"><div className="grid gap-4 md:grid-cols-2"><label className="text-sm">Name<input value={org.name} disabled={user?.role!=="admin"} onChange={e=>setOrg({...org,name:e.target.value})} className="mt-1 w-full rounded border px-3 py-2"/></label><label className="text-sm">Slug<input value={org.slug} disabled className="mt-1 w-full rounded border bg-slate-50 px-3 py-2"/></label><label className="md:col-span-2 text-sm">Description<textarea value={org.description||""} disabled={user?.role!=="admin"} onChange={e=>setOrg({...org,description:e.target.value})} rows={6} className="mt-1 w-full rounded border px-3 py-2"/></label></div>{user?.role==="admin"&&<button onClick={async()=>{try{setError("");await updateOrganizationAdmin(org.id,{name:org.name,description:org.description});setMessage("Organization updated") }catch(e:any){setError(e?.response?.data?.detail||"Update failed")}}} className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-white">Save changes</button>}</div></div>
+}

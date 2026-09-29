@@ -8,6 +8,9 @@ from app.schemas.ai import AIChatRequest, AIChatResponse
 from app.services.agent_service import AgentService
 from app.services.conversation_service import ConversationService
 from app.models.conversation import Conversation
+from app.services.authorization_scope_service import (
+    AuthorizationScopeService,
+)
 
 
 router = APIRouter(
@@ -91,10 +94,16 @@ def chat(
     # Run AI agent
     # -------------------------------------------------
 
+    scope = AuthorizationScopeService.get_scope(
+        db=db,
+        current_user=current_user,
+    )
+
     result = AgentService.run(
         db=db,
         query=request.message,
-        organization_id=organization_id,
+        organization_id=scope.organization_id,
+        project_ids=scope.project_ids,
         conversation_history=conversation_history,
     )
 

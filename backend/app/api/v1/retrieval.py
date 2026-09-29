@@ -14,6 +14,9 @@ from app.schemas.search import SearchRequest
 from app.services.hybrid_retrieval_service import (
     HybridRetrievalService,
 )
+from app.services.authorization_scope_service import (
+    AuthorizationScopeService,
+)
 
 
 router = APIRouter(
@@ -34,6 +37,10 @@ def hybrid_retrieval(
     db: Session = Depends(get_db),
 ):
 
+    scope = AuthorizationScopeService.get_scope(
+        db=db,
+        current_user=current_user,
+    )
     service = HybridRetrievalService()
 
     raw_retrieval = service.retrieve(
@@ -42,6 +49,7 @@ def hybrid_retrieval(
         organization_id=(
             current_user.organization_id
         ),
+        project_ids=scope.project_ids,
         limit=data.limit,
     )
 
@@ -51,6 +59,7 @@ def hybrid_retrieval(
         organization_id=(
             current_user.organization_id
         ),
+        project_ids=scope.project_ids,
         limit=data.limit,
         max_context_items=10,
     )

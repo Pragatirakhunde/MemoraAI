@@ -10,6 +10,7 @@ class DataSourceRepository:
     def create(
         db: Session,
         organization_id: int,
+        project_id: int | None,
         name: str,
         source_type: str,
         config: dict,
@@ -17,6 +18,7 @@ class DataSourceRepository:
 
         data_source = DataSource(
             organization_id=organization_id,
+            project_id=project_id,
             name=name,
             source_type=source_type,
             config=config,

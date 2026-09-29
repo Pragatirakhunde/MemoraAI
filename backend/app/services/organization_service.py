@@ -41,3 +41,19 @@ class OrganizationService:
         db: Session,
     ):
         return OrganizationRepository.get_all(db)
+
+    @staticmethod
+    def get_organizations_for_user(db: Session, organization_id: int):
+        organization = OrganizationRepository.get_by_id(db, organization_id)
+        return [organization] if organization is not None else []
+
+    @staticmethod
+    def update_organization(db: Session, organization_id: int, name: str, description: str | None):
+        organization = OrganizationRepository.get_by_id(db, organization_id)
+        if organization is None:
+            return None
+        organization.name = name.strip()
+        organization.description = description
+        db.commit()
+        db.refresh(organization)
+        return organization

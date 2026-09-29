@@ -26,6 +26,9 @@ from app.services.document_service import (
 from app.services.document_processing_service import (
     DocumentProcessingService,
 )
+from app.services.graph_indexing_service import (
+    GraphIndexingService,
+)
 
 
 class SyncService:
@@ -167,6 +170,7 @@ class SyncService:
                             organization_id=(
                                 data_source.organization_id
                             ),
+                            project_id=data_source.project_id,
                             data_source_id=data_source.id,
                             source_file=existing,
                             content=content,
@@ -175,6 +179,10 @@ class SyncService:
 
                     # Automatically process
                     DocumentProcessingService.process_document(
+                        db=db,
+                        document=document,
+                    )
+                    GraphIndexingService.index_document(
                         db=db,
                         document=document,
                     )

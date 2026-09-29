@@ -9,6 +9,7 @@ class AgentService:
         db,
         query,
         organization_id,
+        project_ids,
         conversation_history=None,
     ):
 
@@ -27,6 +28,7 @@ class AgentService:
             {
                 "query": query,
                 "organization_id": organization_id,
+                "project_ids": project_ids,
                 "conversation_history": conversation_history or [],
             }
         )

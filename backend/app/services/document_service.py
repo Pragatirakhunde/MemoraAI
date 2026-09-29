@@ -15,6 +15,7 @@ class DocumentService:
     def ingest_file(
         db: Session,
         organization_id: int,
+        project_id: int | None,
         data_source_id: int,
         source_file: DataSourceFile,
         content: str,
@@ -34,6 +35,7 @@ class DocumentService:
             document = DocumentRepository.create(
                 db=db,
                 organization_id=organization_id,
+                project_id=project_id,
                 data_source_id=data_source_id,
                 source_file_id=source_file.id,
                 title=title,
@@ -48,6 +50,7 @@ class DocumentService:
             document = DocumentRepository.update(
                 db=db,
                 document=document,
+                project_id=project_id,
                 content=content,
                 checksum=source_file.checksum,
                 title=title,
@@ -75,4 +78,30 @@ class DocumentService:
             db,
             document_id,
             organization_id,
+        )
+
+    @staticmethod
+    def get_accessible_documents(
+        db: Session,
+        organization_id: int,
+        project_ids: list[int],
+    ):
+        return DocumentRepository.get_accessible(
+            db=db,
+            organization_id=organization_id,
+            project_ids=project_ids,
+        )
+
+    @staticmethod
+    def get_accessible_document(
+        db: Session,
+        document_id: int,
+        organization_id: int,
+        project_ids: list[int],
+    ):
+        return DocumentRepository.get_accessible_by_id(
+            db=db,
+            document_id=document_id,
+            organization_id=organization_id,
+            project_ids=project_ids,
         )

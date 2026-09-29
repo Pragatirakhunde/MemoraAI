@@ -23,3 +23,4 @@ class CurrentUserResponse(BaseModel):
     email: str
     role: str
     organization_id: int
+    approval_status: str

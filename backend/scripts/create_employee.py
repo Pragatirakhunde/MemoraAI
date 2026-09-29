@@ -19,6 +19,7 @@ try:
             email="employee@technova.com",
             password_hash=hash_password("Employee@123"),
             role="employee",
+            approval_status="APPROVED",
             is_active=True,
         )
 

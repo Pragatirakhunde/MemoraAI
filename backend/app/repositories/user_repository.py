@@ -55,6 +55,8 @@ class UserRepository:
         email: str,
         password_hash: str,
         role: str = "employee",
+        approval_status: str = "APPROVED",
+        is_active: bool = True,
     ) -> User:
 
         user = User(
@@ -63,6 +65,8 @@ class UserRepository:
             email=email,
             password_hash=password_hash,
             role=role,
+            approval_status=approval_status,
+            is_active=is_active,
         )
 
         db.add(user)
@@ -70,3 +74,19 @@ class UserRepository:
         db.refresh(user)
 
         return user
+
+    @staticmethod
+    def get_pending_by_org(
+        db: Session,
+        organization_id: int,
+    ) -> list[User]:
+        statement = (
+            select(User)
+            .where(
+                User.organization_id == organization_id,
+                User.approval_status == "PENDING",
+            )
+            .order_by(User.created_at)
+        )
+
+        return list(db.scalars(statement).all())

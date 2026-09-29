@@ -1,7 +1,10 @@
 from qdrant_client.models import (
     FieldCondition,
     Filter,
+    IsEmptyCondition,
+    MatchAny,
     MatchValue,
+    PayloadField,
 )
 from sqlalchemy.orm import Session
 
@@ -25,6 +28,7 @@ class SearchService:
         db: Session,
         query: str,
         organization_id: int,
+        project_ids: list[int],
         limit: int = 5,
         document_type: str | None = None,
         language: str | None = None,
@@ -46,6 +50,30 @@ class SearchService:
                 ),
             )
         ]
+
+        # Organization memory OR authorized project.
+        project_scope = [
+            IsEmptyCondition(
+                is_empty=PayloadField(
+                    key="project_id"
+                )
+            )
+        ]
+
+        if project_ids:
+            project_scope.append(
+                FieldCondition(
+                    key="project_id",
+                    match=MatchAny(
+                        any=project_ids
+                    ),
+                )
+            )
+
+        query_filter = Filter(
+            must=conditions,
+            should=project_scope,
+        )
 
         if document_type:
             conditions.append(
@@ -87,10 +115,6 @@ class SearchService:
                 )
             )
 
-        query_filter = Filter(
-            must=conditions
-        )
-
         response = qdrant_client.query_points(
             collection_name=COLLECTION_NAME,
             query=query_vector,
@@ -115,10 +139,12 @@ class SearchService:
                 )
 
         documents = (
-            DocumentRepository.get_by_ids(
+            DocumentRepository
+            .get_accessible_by_ids(
                 db=db,
                 document_ids=document_ids,
                 organization_id=organization_id,
+                project_ids=project_ids,
             )
         )
 
@@ -140,7 +166,6 @@ class SearchService:
                 document_id
             )
 
-            # Ignore stale Qdrant references.
             if document is None:
                 continue
 
@@ -160,16 +185,13 @@ class SearchService:
                         "title": document.title,
                         "file_path": document.file_path,
                         "extension": document.extension,
-                        "document_type": (
-                            payload.get(
-                                "document_type"
-                            )
+                        "document_type": payload.get(
+                            "document_type"
                         ),
-                        "language": (
-                            payload.get(
-                                "language"
-                            )
+                        "language": payload.get(
+                            "language"
                         ),
+                        "project_id": document.project_id,
                         "chunk_index": payload.get(
                             "chunk_index",
                             0,

@@ -7,11 +7,13 @@ class DataSourceCreate(BaseModel):
     name: str
     source_type: str
     config: dict
+    project_id: int | None = None
 
 
 class DataSourceResponse(BaseModel):
     id: int
     organization_id: int
+    project_id: int | None
     name: str
     source_type: str
     config: dict

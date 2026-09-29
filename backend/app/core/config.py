@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     SYNC_INTERVAL_SECONDS: int = 900
 
+    CODEMIND_QDRANT_COLLECTION: str = "codemind_code_chunks"
+    CODEMIND_MAX_FILE_SIZE_MB: int = 5
+    GITHUB_WEBHOOK_SECRET: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

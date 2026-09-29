@@ -1,4 +1,4 @@
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text 
 from sqlalchemy.orm import Session
 
 from app.models.conversation import Conversation, Message
@@ -10,6 +10,8 @@ from app.models.organization import Organization
 from app.models.sync_job import SyncJob
 from app.models.user import User
 from app.services.graph_query_service import GraphQueryService
+from app.services.authorization_scope_service import AuthorizationScopeService
+from app.repositories.project_repository import ProjectRepository
 
 
 class AdminDashboardService:
@@ -467,13 +469,22 @@ class AdminDashboardService:
         # Knowledge Graph
         # =================================================
 
-        graph_stats = (
-            GraphQueryService.get_graph_stats(
-                organization_id
-            )
+        project_list = ProjectRepository.get_all_by_org(
+            db=db,
+            organization_id=organization_id,
         )
 
-                # =================================================
+        project_ids = [
+            project.id
+            for project in project_list
+        ]
+
+        graph_stats = GraphQueryService.get_graph_stats(
+            organization_id=organization_id,
+            project_ids=project_ids,
+        )
+
+        # =================================================
         # Recent Sync Activity
         # =================================================
 

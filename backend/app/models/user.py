@@ -20,6 +20,10 @@ class User(Base):
             "role IN ('admin', 'employee')",
             name="check_user_role",
         ),
+        CheckConstraint(
+            "approval_status IN ('PENDING', 'APPROVED', 'REJECTED')",
+            name="check_user_approval_status",
+        ),
     )
 
     id: Mapped[int] = mapped_column(
@@ -30,6 +34,12 @@ class User(Base):
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"),
         nullable=False,
+        index=True,
+    )
+    
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id"),
+        nullable=True,
         index=True,
     )
 
@@ -54,6 +64,12 @@ class User(Base):
         String(20),
         nullable=False,
         default="employee",
+    )
+
+    approval_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="PENDING",
     )
 
     is_active: Mapped[bool] = mapped_column(

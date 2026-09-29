@@ -5,6 +5,7 @@ from app.database.postgres import get_db
 from app.schemas.organization import (
     OrganizationCreate,
     OrganizationResponse,
+    OrganizationUpdate,
 )
 from app.services.organization_service import OrganizationService
 from app.api.v1.auth.roles import require_admin , require_employee
@@ -47,7 +48,7 @@ def get_organizations(
     db: Session = Depends(get_db),
     current_user=Depends(require_employee),
 ):
-    return OrganizationService.get_all_organizations(db)
+    return OrganizationService.get_organizations_for_user(db, current_user.organization_id)
 
 
 @router.get(
@@ -59,6 +60,12 @@ def get_organization(
     db: Session = Depends(get_db),
     current_user=Depends(require_employee),
 ):
+    if organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization access denied",
+        )
+
     organization = OrganizationService.get_organization(
         db,
         organization_id,
@@ -70,4 +77,20 @@ def get_organization(
             detail="Organization not found",
         )
 
+    return organization
+
+@router.patch("/{organization_id}", response_model=OrganizationResponse)
+def update_organization(
+    organization_id: int,
+    data: OrganizationUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    if organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Organization access denied")
+    organization = OrganizationService.update_organization(
+        db, organization_id, data.name, data.description
+    )
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
     return organization

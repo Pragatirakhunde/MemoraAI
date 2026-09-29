@@ -15,7 +15,7 @@ class LLMService:
             )
 
         self.model = ChatGoogleGenerativeAI(
-            model="gemini-3.1-flash-lite",
+            model="gemini-3.5-flash-lite",
             max_retries=2,
             google_api_key=settings.GOOGLE_API_KEY,
         )

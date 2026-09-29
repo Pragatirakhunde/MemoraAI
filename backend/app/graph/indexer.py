@@ -61,7 +61,8 @@ class GraphIndexer:
             d.file_path = $file_path,
             d.extension = $extension,
             d.checksum = $checksum,
-            d.organization_id = $organization_id
+            d.organization_id = $organization_id,
+            d.project_id = $project_id
         """
 
         with driver.session() as session:
@@ -73,6 +74,7 @@ class GraphIndexer:
                 extension=document.extension,
                 checksum=document.checksum,
                 organization_id=document.organization_id,
+                project_id=document.project_id,
             )
 
     @staticmethod
@@ -94,9 +96,72 @@ class GraphIndexer:
             )
 
     @staticmethod
+    def create_project(
+        project_id: int,
+        organization_id: int,
+        name: str,
+        slug: str,
+    ) -> None:
+
+        query = """
+        MERGE (
+            p:Project {
+                organization_id: $organization_id,
+                project_id: $project_id
+            }
+        )
+        SET
+            p.name = $name,
+            p.slug = $slug,
+            p.project_ids = [$project_id]
+        """
+
+        with driver.session() as session:
+            session.run(
+                query,
+                project_id=project_id,
+                organization_id=organization_id,
+                name=name,
+                slug=slug,
+            )
+
+    @staticmethod
+    def link_project_to_document(
+        project_id: int,
+        organization_id: int,
+        document_id: int,
+    ) -> None:
+
+        query = """
+        MATCH (
+            p:Project {
+                organization_id: $organization_id,
+                project_id: $project_id
+            }
+        )
+
+        MATCH (
+            d:Document {
+                id: $document_id
+            }
+        )
+
+        MERGE (p)-[:HAS_DOCUMENT]->(d)
+        """
+
+        with driver.session() as session:
+            session.run(
+                query,
+                project_id=project_id,
+                organization_id=organization_id,
+                document_id=document_id,
+            )
+
+    @staticmethod
     def create_entity(
         entity: ExtractedEntity,
         organization_id: int,
+        project_id: int | None,
     ) -> None:
 
         name = entity.name.strip()
@@ -105,60 +170,77 @@ class GraphIndexer:
             name,
         )
 
+        project_update = """
+            ,
+            n.project_ids =
+                CASE
+                    WHEN $project_id IS NULL
+                    THEN coalesce(n.project_ids, [])
+                    WHEN $project_id IN coalesce(n.project_ids, [])
+                    THEN coalesce(n.project_ids, [])
+                    ELSE coalesce(n.project_ids, []) + $project_id
+                END
+            """
+
         if entity.entity_type == "PROJECT":
 
-            query = """
-            MERGE (n:Project {key: $key})
+            query = f"""
+            MERGE (n:Project {{key: $key}})
             SET
                 n.name = $name,
                 n.organization_id = $organization_id,
                 n.confidence = $confidence
+            {project_update}
             """
 
         elif entity.entity_type == "MODULE":
 
-            query = """
-            MERGE (n:Module {key: $key})
+            query = f"""
+            MERGE (n:Module {{key: $key}})
             SET
                 n.name = $name,
                 n.organization_id = $organization_id,
                 n.confidence = $confidence
+            {project_update}
             """
 
         elif entity.entity_type == "API":
 
-            query = """
-            MERGE (n:API {key: $key})
+            query = f"""
+            MERGE (n:API {{key: $key}})
             SET
                 n.name = $name,
                 n.organization_id = $organization_id,
                 n.confidence = $confidence
+            {project_update}
             """
 
         elif entity.entity_type == "TECHNOLOGY":
 
-            query = """
+            query = f"""
             MERGE (
-                n:Technology {
+                n:Technology {{
                     organization_id: $organization_id,
                     name: $name
-                }
+                }}
             )
             SET
                 n.confidence = $confidence
+            {project_update}
             """
 
         elif entity.entity_type == "DATABASE":
 
-            query = """
+            query = f"""
             MERGE (
-                n:Database {
+                n:Database {{
                     organization_id: $organization_id,
                     name: $name
-                }
+                }}
             )
             SET
                 n.confidence = $confidence
+            {project_update}
             """
 
         else:
@@ -170,6 +252,7 @@ class GraphIndexer:
                 key=key,
                 name=name,
                 organization_id=organization_id,
+                project_id=project_id,
                 confidence=entity.confidence,
             )
 
@@ -388,6 +471,7 @@ class GraphIndexer:
             GraphIndexer.create_entity(
                 entity,
                 document.organization_id,
+                document.project_id,
             )
 
             GraphIndexer.link_document_to_entity(

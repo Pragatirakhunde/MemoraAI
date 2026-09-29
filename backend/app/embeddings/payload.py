@@ -13,6 +13,7 @@ def build_chunk_payload(
         "document_id": document.id,
         "chunk_id": chunk.id,
         "organization_id": document.organization_id,
+        "project_id": document.project_id,
         "data_source_id": document.data_source_id,
         "source_file_id": document.source_file_id,
         "chunk_index": chunk.chunk_index,

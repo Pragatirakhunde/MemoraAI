@@ -38,6 +38,11 @@ class Document(Base):
         nullable=False,
         index=True,
     )
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id"),
+        nullable=True,
+        index=True,
+    )
 
     data_source_id: Mapped[int] = mapped_column(
         ForeignKey("data_sources.id"),

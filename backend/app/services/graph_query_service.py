@@ -6,11 +6,17 @@ class GraphQueryService:
     @staticmethod
     def list_projects(
         organization_id: int,
+        project_ids: list[int],
     ) -> list[dict]:
 
         query = """
         MATCH (p:Project)
         WHERE p.organization_id = $organization_id
+          AND any(
+              pid IN coalesce(p.project_ids, [])
+              WHERE pid IN $project_ids
+          )
+
         RETURN
             p.name AS name,
             p.key AS key,
@@ -22,6 +28,7 @@ class GraphQueryService:
             result = session.run(
                 query,
                 organization_id=organization_id,
+                project_ids=project_ids,
             )
 
             return result.data()
@@ -30,22 +37,32 @@ class GraphQueryService:
     def get_project_context(
         organization_id: int,
         project_name: str,
+        project_ids: list[int],
     ) -> dict:
 
         project_query = """
         MATCH (p:Project)
         WHERE p.organization_id = $organization_id
           AND toLower(p.name) = toLower($project_name)
+          AND any(
+              pid IN coalesce(p.project_ids, [])
+              WHERE pid IN $project_ids
+          )
 
         OPTIONAL MATCH (p)-[:USES]->(t:Technology)
         OPTIONAL MATCH (p)-[:USES_DATABASE]->(db:Database)
+        OPTIONAL MATCH (p)-[:HAS_MODULE]->(m:Module)
         OPTIONAL MATCH (d:Document)-[:DOCUMENTS]->(p)
 
         RETURN
             p.name AS project,
+
             collect(DISTINCT t.name) AS technologies,
+
             collect(DISTINCT db.name) AS databases,
+
             collect(DISTINCT m.name) AS modules,
+
             collect(DISTINCT {
                 id: d.id,
                 title: d.title,
@@ -57,6 +74,7 @@ class GraphQueryService:
         MATCH (d:Document)-[:DOCUMENTS]->(p:Project)
         WHERE p.organization_id = $organization_id
           AND toLower(p.name) = toLower($project_name)
+          AND d.project_id IN $project_ids
 
         RETURN
             d.id AS document_id,
@@ -71,6 +89,7 @@ class GraphQueryService:
                 project_query,
                 organization_id=organization_id,
                 project_name=project_name,
+                project_ids=project_ids,
             ).single()
 
             if project_result is None:
@@ -86,19 +105,20 @@ class GraphQueryService:
                 document_query,
                 organization_id=organization_id,
                 project_name=project_name,
+                project_ids=project_ids,
             )
 
             return {
                 "project": project_result["project"],
-                "technologies": (
-                    project_result["technologies"]
-                ),
-                "databases": (
-                    project_result["databases"]
-                ),
-                "modules": (
-                    project_result["modules"]
-                ),
+                "technologies": project_result[
+                    "technologies"
+                ],
+                "databases": project_result[
+                    "databases"
+                ],
+                "modules": project_result[
+                    "modules"
+                ],
                 "documents": document_result.data(),
             }
 
@@ -106,17 +126,28 @@ class GraphQueryService:
     def get_projects_using_technology(
         organization_id: int,
         technology_name: str,
+        project_ids: list[int],
     ) -> list[dict]:
 
         query = """
         MATCH (p:Project)-[:USES]->(t:Technology)
+
         WHERE p.organization_id = $organization_id
+
+          AND any(
+              pid IN coalesce(p.project_ids, [])
+              WHERE pid IN $project_ids
+          )
+
           AND t.organization_id = $organization_id
-          AND toLower(t.name) = toLower($technology_name)
+
+          AND toLower(t.name)
+              = toLower($technology_name)
 
         RETURN
             p.name AS project,
             t.name AS technology
+
         ORDER BY p.name
         """
 
@@ -125,6 +156,7 @@ class GraphQueryService:
                 query,
                 organization_id=organization_id,
                 technology_name=technology_name,
+                project_ids=project_ids,
             )
 
             return result.data()
@@ -133,17 +165,28 @@ class GraphQueryService:
     def get_projects_using_database(
         organization_id: int,
         database_name: str,
+        project_ids: list[int],
     ) -> list[dict]:
 
         query = """
         MATCH (p:Project)-[:USES_DATABASE]->(db:Database)
+
         WHERE p.organization_id = $organization_id
+
+          AND any(
+              pid IN coalesce(p.project_ids, [])
+              WHERE pid IN $project_ids
+          )
+
           AND db.organization_id = $organization_id
-          AND toLower(db.name) = toLower($database_name)
+
+          AND toLower(db.name)
+              = toLower($database_name)
 
         RETURN
             p.name AS project,
             db.name AS database
+
         ORDER BY p.name
         """
 
@@ -152,20 +195,82 @@ class GraphQueryService:
                 query,
                 organization_id=organization_id,
                 database_name=database_name,
+                project_ids=project_ids,
             )
 
             return result.data()
 
     @staticmethod
+    def _visible_node_condition(
+        alias: str,
+    ) -> str:
+
+        return f"""
+        (
+            {alias}:Organization
+
+            OR (
+                {alias}:Document
+                AND (
+                    {alias}.project_id IS NULL
+                    OR {alias}.project_id IN $project_ids
+                )
+            )
+
+            OR (
+                {alias}:Project
+                AND any(
+                    pid IN coalesce(
+                        {alias}.project_ids,
+                        []
+                    )
+                    WHERE pid IN $project_ids
+                )
+            )
+
+            OR (
+                NOT {alias}:Organization
+                AND NOT {alias}:Document
+                AND NOT {alias}:Project
+                AND (
+                    coalesce(
+                        {alias}.project_ids,
+                        []
+                    ) = []
+
+                    OR any(
+                        pid IN coalesce(
+                            {alias}.project_ids,
+                            []
+                        )
+                        WHERE pid IN $project_ids
+                    )
+                )
+            )
+        )
+        """
+
+    @staticmethod
     def get_documents_for_entity(
         organization_id: int,
         entity_name: str,
+        project_ids: list[int],
     ) -> list[dict]:
 
-        query = """
+        visibility = (
+            GraphQueryService
+            ._visible_node_condition("d")
+        )
+
+        query = f"""
         MATCH (d:Document)-[r:MENTIONS]->(n)
+
         WHERE d.organization_id = $organization_id
-          AND toLower(n.name) = toLower($entity_name)
+
+          AND {visibility}
+
+          AND toLower(n.name)
+              = toLower($entity_name)
 
         RETURN
             d.id AS document_id,
@@ -174,6 +279,7 @@ class GraphQueryService:
             type(r) AS relationship,
             labels(n) AS entity_type,
             n.name AS entity_name
+
         ORDER BY d.title
         """
 
@@ -182,6 +288,7 @@ class GraphQueryService:
                 query,
                 organization_id=organization_id,
                 entity_name=entity_name,
+                project_ids=project_ids,
             )
 
             return result.data()
@@ -190,20 +297,33 @@ class GraphQueryService:
     def get_project_knowledge(
         organization_id: int,
         project_name: str,
+        project_ids: list[int],
     ) -> dict:
 
         query = """
         MATCH (p:Project)
+
         WHERE p.organization_id = $organization_id
-        AND toLower(p.name) = toLower($project_name)
+
+          AND toLower(p.name)
+              = toLower($project_name)
+
+          AND any(
+              pid IN coalesce(
+                  p.project_ids,
+                  []
+              )
+              WHERE pid IN $project_ids
+          )
 
         OPTIONAL MATCH (p)-[:USES]->(t:Technology)
         OPTIONAL MATCH (p)-[:USES_DATABASE]->(db:Database)
         OPTIONAL MATCH (p)-[:HAS_MODULE]->(m:Module)
 
-        OPTIONAL MATCH (d:Document)-[
-            :DOCUMENTS
-        ]->(p)
+        OPTIONAL MATCH (p)-[:HAS_DOCUMENT]->(d:Document)
+
+        WHERE
+            d.project_id IN $project_ids
 
         RETURN
             p.name AS project,
@@ -236,6 +356,7 @@ class GraphQueryService:
                 query,
                 organization_id=organization_id,
                 project_name=project_name,
+                project_ids=project_ids,
             )
 
             record = result.single()
@@ -251,21 +372,25 @@ class GraphQueryService:
 
             return {
                 "project": record["project"],
+
                 "technologies": [
                     item
                     for item in record["technologies"]
                     if item["name"] is not None
                 ],
+
                 "databases": [
                     item
                     for item in record["databases"]
                     if item["name"] is not None
                 ],
+
                 "modules": [
                     item
                     for item in record["modules"]
                     if item["name"] is not None
                 ],
+
                 "documents": [
                     item
                     for item in record["documents"]
@@ -277,21 +402,35 @@ class GraphQueryService:
     def get_entity_neighborhood(
         organization_id: int,
         entity_name: str,
+        project_ids: list[int],
     ) -> list[dict]:
 
-        query = """
+        source_visibility = (
+            GraphQueryService
+            ._visible_node_condition("n")
+        )
+
+        target_visibility = (
+            GraphQueryService
+            ._visible_node_condition("related")
+        )
+
+        query = f"""
         MATCH (n)
+
         WHERE
-            toLower(coalesce(n.name, ''))
-                = toLower($entity_name)
-            AND n.organization_id
-                = $organization_id
+            n.organization_id = $organization_id
+            AND toLower(
+                coalesce(n.name, '')
+            ) = toLower($entity_name)
+            AND {source_visibility}
 
         OPTIONAL MATCH (n)-[r]-(related)
 
         WHERE
-            related.organization_id
-                = $organization_id
+            related.organization_id =
+                $organization_id
+            AND {target_visibility}
 
         RETURN
             labels(n) AS source_type,
@@ -299,6 +438,7 @@ class GraphQueryService:
             type(r) AS relationship,
             labels(related) AS target_type,
             related.name AS target_name
+
         ORDER BY relationship, target_name
         """
 
@@ -308,6 +448,7 @@ class GraphQueryService:
                 query,
                 organization_id=organization_id,
                 entity_name=entity_name,
+                project_ids=project_ids,
             )
 
             return result.data()
@@ -316,18 +457,32 @@ class GraphQueryService:
     def get_project_documents(
         organization_id: int,
         project_name: str,
+        project_ids: list[int],
     ) -> list[dict]:
 
         query = """
         MATCH (d:Document)-[:DOCUMENTS]->(p:Project)
+
         WHERE p.organization_id = $organization_id
-        AND toLower(p.name)
-            = toLower($project_name)
+
+          AND toLower(p.name)
+              = toLower($project_name)
+
+          AND any(
+              pid IN coalesce(
+                  p.project_ids,
+                  []
+              )
+              WHERE pid IN $project_ids
+          )
+
+          AND d.project_id IN $project_ids
 
         RETURN
             d.id AS document_id,
             d.title AS title,
             d.file_path AS file_path
+
         ORDER BY d.title
         """
 
@@ -337,6 +492,7 @@ class GraphQueryService:
                 query,
                 organization_id=organization_id,
                 project_name=project_name,
+                project_ids=project_ids,
             )
 
             return result.data()
@@ -345,6 +501,7 @@ class GraphQueryService:
     def expand_entity(
         organization_id: int,
         entity_name: str,
+        project_ids: list[int],
         max_hops: int = 2,
         limit: int = 20,
     ) -> list[dict]:
@@ -354,31 +511,53 @@ class GraphQueryService:
             min(max_hops, 2),
         )
 
+        start_visibility = (
+            GraphQueryService
+            ._visible_node_condition("start")
+        )
+
+        related_visibility = (
+            GraphQueryService
+            ._visible_node_condition("related")
+        )
+
         query = f"""
         MATCH (start)
+
         WHERE
-            toLower(coalesce(start.name, ''))
-                = toLower($entity_name)
+            toLower(
+                coalesce(start.name, '')
+            ) = toLower($entity_name)
+
             AND (
-                start.organization_id = $organization_id
+                start.organization_id =
+                    $organization_id
                 OR (
                     start:Organization
-                    AND start.id = $organization_id
+                    AND start.id =
+                        $organization_id
                 )
             )
+
+            AND {start_visibility}
 
         MATCH path =
             (start)-[*1..{max_hops}]-(related)
 
         WHERE
             related <> start
+
             AND (
-                related.organization_id = $organization_id
+                related.organization_id =
+                    $organization_id
                 OR (
                     related:Organization
-                    AND related.id = $organization_id
+                    AND related.id =
+                        $organization_id
                 )
             )
+
+            AND {related_visibility}
 
         RETURN
             start.name AS source_name,
@@ -386,7 +565,10 @@ class GraphQueryService:
 
             [
                 node IN nodes(path) |
-                coalesce(node.name, toString(node.id))
+                coalesce(
+                    node.name,
+                    toString(node.id)
+                )
             ] AS path_nodes,
 
             [
@@ -408,6 +590,7 @@ class GraphQueryService:
                 query,
                 organization_id=organization_id,
                 entity_name=entity_name,
+                project_ids=project_ids,
                 limit=limit,
             )
 
@@ -417,27 +600,42 @@ class GraphQueryService:
     def resolve_entities_from_query(
         organization_id: int,
         query_text: str,
+        project_ids: list[int],
         limit: int = 20,
     ) -> list[dict]:
 
-        cypher = """
+        visibility = (
+            GraphQueryService
+            ._visible_node_condition("n")
+        )
+
+        cypher = f"""
         MATCH (n)
+
         WHERE
             n.name IS NOT NULL
+
             AND (
-                n.organization_id = $organization_id
+                n.organization_id =
+                    $organization_id
                 OR (
                     n:Organization
-                    AND n.id = $organization_id
+                    AND n.id =
+                        $organization_id
                 )
             )
+
+            AND {visibility}
+
             AND toLower($query_text)
                 CONTAINS toLower(n.name)
 
         RETURN
             n.name AS name,
             labels(n) AS labels
+
         ORDER BY size(n.name) DESC
+
         LIMIT $limit
         """
 
@@ -447,6 +645,7 @@ class GraphQueryService:
                 cypher,
                 organization_id=organization_id,
                 query_text=query_text,
+                project_ids=project_ids,
                 limit=limit,
             )
 
@@ -456,32 +655,84 @@ class GraphQueryService:
     def get_project_graph(
         organization_id: int,
         project_name: str,
+        project_ids: list[int],
     ) -> dict:
-        """
-        Return a frontend-friendly one-hop graph
-        centered around a project.
-        """
 
         query = """
         MATCH (p:Project)
-        WHERE p.organization_id = $organization_id
-          AND toLower(p.name) = toLower($project_name)
+
+        WHERE p.organization_id =
+            $organization_id
+
+          AND toLower(p.name) =
+              toLower($project_name)
+
+          AND any(
+              pid IN coalesce(
+                  p.project_ids,
+                  []
+              )
+              WHERE pid IN $project_ids
+          )
 
         OPTIONAL MATCH (p)-[r]-(n)
 
         WHERE
-            n.organization_id = $organization_id
+            n.organization_id =
+                $organization_id
+
+            AND (
+                n:Organization
+
+                OR (
+                    n:Document
+                    AND (
+                        n.project_id IS NULL
+                        OR n.project_id IN $project_ids
+                    )
+                )
+
+                OR (
+                    n:Project
+                    AND any(
+                        pid IN coalesce(
+                            n.project_ids,
+                            []
+                        )
+                        WHERE pid IN $project_ids
+                    )
+                )
+
+                OR (
+                    NOT n:Organization
+                    AND NOT n:Document
+                    AND NOT n:Project
+                    AND (
+                        coalesce(
+                            n.project_ids,
+                            []
+                        ) = []
+
+                        OR any(
+                            pid IN coalesce(
+                                n.project_ids,
+                                []
+                            )
+                            WHERE pid IN $project_ids
+                        )
+                    )
+                )
+            )
 
         RETURN
             p.name AS project_name,
             labels(p) AS project_type,
             elementId(p) AS project_id,
-
             type(r) AS relationship,
-
-            n.name AS target_name,
+            coalesce(n.name, n.title) AS target_name,
             labels(n) AS target_type,
             elementId(n) AS target_id
+
         ORDER BY relationship, target_name
         """
 
@@ -491,6 +742,7 @@ class GraphQueryService:
                 query,
                 organization_id=organization_id,
                 project_name=project_name,
+                project_ids=project_ids,
             )
 
             records = result.data()
@@ -507,8 +759,14 @@ class GraphQueryService:
         first = records[0]
 
         project_id = first.get("project_id")
-        project_name_value = first.get("project_name")
-        project_type = first.get("project_type") or ["Project"]
+        project_name_value = first.get(
+            "project_name"
+        )
+
+        project_type = (
+            first.get("project_type")
+            or ["Project"]
+        )
 
         if project_id:
             nodes[str(project_id)] = {
@@ -519,10 +777,22 @@ class GraphQueryService:
 
         for record in records:
 
-            target_id = record.get("target_id")
-            target_name = record.get("target_name")
-            target_type = record.get("target_type") or []
-            relationship = record.get("relationship")
+            target_id = record.get(
+                "target_id"
+            )
+
+            target_name = record.get(
+                "target_name"
+            )
+
+            target_type = (
+                record.get("target_type")
+                or []
+            )
+
+            relationship = record.get(
+                "relationship"
+            )
 
             if not target_id or not target_name:
                 continue
@@ -532,7 +802,11 @@ class GraphQueryService:
             nodes[target_id] = {
                 "id": target_id,
                 "label": target_name,
-                "type": target_type[0] if target_type else "Entity",
+                "type": (
+                    target_type[0]
+                    if target_type
+                    else "Entity"
+                ),
             }
 
             if relationship and project_id:
@@ -543,8 +817,7 @@ class GraphQueryService:
                     relationship,
                 )
 
-                if edge_key not in edges:
-                    edges.add(edge_key)
+                edges.add(edge_key)
 
         return {
             "nodes": list(nodes.values()),
@@ -561,29 +834,68 @@ class GraphQueryService:
     @staticmethod
     def get_graph_stats(
         organization_id: int,
+        project_ids: list[int],
     ) -> dict:
 
-        node_query = """
+        visible_condition = (
+            GraphQueryService
+            ._visible_node_condition("n")
+        )
+
+        node_query = f"""
         MATCH (n)
-        WHERE n.organization_id = $organization_id
+
+        WHERE
+            n.organization_id =
+                $organization_id
+
+            AND {visible_condition}
 
         RETURN
             count(n) AS total_nodes,
-            count(CASE WHEN n:Project
-                THEN 1 END) AS projects,
-            count(CASE WHEN n:Technology
-                THEN 1 END) AS technologies,
-            count(CASE WHEN n:Database
-                THEN 1 END) AS databases,
-            count(CASE WHEN n:Document
-                THEN 1 END) AS documents
+
+            count(
+                CASE
+                    WHEN n:Project
+                    THEN 1
+                END
+            ) AS projects,
+
+            count(
+                CASE
+                    WHEN n:Technology
+                    THEN 1
+                END
+            ) AS technologies,
+
+            count(
+                CASE
+                    WHEN n:Database
+                    THEN 1
+                END
+            ) AS databases,
+
+            count(
+                CASE
+                    WHEN n:Document
+                    THEN 1
+                END
+            ) AS documents
         """
 
-        relationship_query = """
+        relationship_query = f"""
         MATCH (a)-[r]-(b)
+
         WHERE
-            a.organization_id = $organization_id
-            AND b.organization_id = $organization_id
+            a.organization_id =
+                $organization_id
+
+            AND b.organization_id =
+                $organization_id
+
+            AND {GraphQueryService._visible_node_condition("a")}
+
+            AND {GraphQueryService._visible_node_condition("b")}
 
         RETURN count(r) AS total_relationships
         """
@@ -593,11 +905,13 @@ class GraphQueryService:
             node_result = session.run(
                 node_query,
                 organization_id=organization_id,
+                project_ids=project_ids,
             ).single()
 
             relationship_result = session.run(
                 relationship_query,
                 organization_id=organization_id,
+                project_ids=project_ids,
             ).single()
 
         return {
@@ -606,26 +920,31 @@ class GraphQueryService:
                 if node_result
                 else 0
             ),
+
             "projects": (
                 node_result["projects"]
                 if node_result
                 else 0
             ),
+
             "technologies": (
                 node_result["technologies"]
                 if node_result
                 else 0
             ),
+
             "databases": (
                 node_result["databases"]
                 if node_result
                 else 0
             ),
+
             "documents": (
                 node_result["documents"]
                 if node_result
                 else 0
             ),
+
             "total_relationships": (
                 relationship_result[
                     "total_relationships"

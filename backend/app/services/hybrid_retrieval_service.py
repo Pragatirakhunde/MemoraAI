@@ -25,6 +25,7 @@ class HybridRetrievalService:
         db: Session,
         query: str,
         organization_id: int,
+        project_ids: list[int],
         limit: int = 5,
     ) -> HybridRetrievalResult:
 
@@ -36,6 +37,7 @@ class HybridRetrievalService:
             db=db,
             query=query,
             organization_id=organization_id,
+            project_ids=project_ids,
             limit=limit,
         )
 
@@ -74,6 +76,7 @@ class HybridRetrievalService:
             GraphQueryService.resolve_entities_from_query(
                 organization_id=organization_id,
                 query_text=query,
+                project_ids=project_ids
             )
         )
 
@@ -142,6 +145,7 @@ class HybridRetrievalService:
                 GraphQueryService.expand_entity(
                     organization_id=organization_id,
                     entity_name=entity["name"],
+                    project_ids=project_ids,
                     max_hops=2,
                     limit=10,
                 )
@@ -215,6 +219,7 @@ class HybridRetrievalService:
                 .get_project_knowledge(
                     organization_id=organization_id,
                     project_name=entity["name"],
+                    project_ids=project_ids,
                 )
             )
 
@@ -333,6 +338,7 @@ class HybridRetrievalService:
         db: Session,
         query: str,
         organization_id: int,
+        project_ids: list[int],
         limit: int = 5,
         max_context_items: int = 10,
     ):
@@ -345,6 +351,7 @@ class HybridRetrievalService:
             db=db,
             query=query,
             organization_id=organization_id,
+            project_ids=project_ids,
             limit=limit,
         )
 

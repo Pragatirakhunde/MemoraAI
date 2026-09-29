@@ -14,6 +14,7 @@ def retrieve_knowledge(state: dict, db: Session) -> dict:
 
     query = state["query"]
     organization_id = state["organization_id"]
+    project_ids = state["project_ids"]
 
     service = HybridRetrievalService()
 
@@ -25,6 +26,7 @@ def retrieve_knowledge(state: dict, db: Session) -> dict:
         db=db,
         query=query,
         organization_id=organization_id,
+        project_ids=project_ids,
         limit=5,
     )
 
@@ -36,6 +38,7 @@ def retrieve_knowledge(state: dict, db: Session) -> dict:
         db=db,
         query=query,
         organization_id=organization_id,
+        project_ids=project_ids,
         limit=5,
         max_context_items=10,
     )

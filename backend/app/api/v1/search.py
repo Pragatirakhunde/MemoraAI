@@ -9,6 +9,9 @@ from app.schemas.search import (
     SearchResult,
 )
 from app.services.search_service import SearchService
+from app.services.authorization_scope_service import (
+    AuthorizationScopeService,
+)
 
 
 router = APIRouter(
@@ -29,6 +32,10 @@ def semantic_search(
     db: Session = Depends(get_db),
 ):
 
+    scope = AuthorizationScopeService.get_scope(
+        db=db,
+        current_user=current_user,
+    )
     service = SearchService()
 
     return service.search(
@@ -37,6 +44,7 @@ def semantic_search(
         organization_id=(
             current_user.organization_id
         ),
+        project_ids=scope.project_ids,
         limit=data.limit,
         document_type=data.document_type,
         language=data.language,
