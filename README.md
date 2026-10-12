@@ -120,3 +120,12 @@ npm run build
 ## Important
 
 External services still require their own runtime availability and credentials: PostgreSQL, Neo4j, Qdrant, Redis and a valid Gemini API key.
+
+## GitHub push updates for CodeMind
+
+CodeMind can validate GitHub push webhook signatures and queue repository refreshes through Celery. Configure `GITHUB_WEBHOOK_SECRET` (and optionally `GITHUB_TOKEN` for private repositories) in `backend/.env`, then register a GitHub webhook targeting `/api/v1/codemind/webhook/github/{repository_id}` with JSON content type and **push events only**. The URL must be reachable from GitHub over HTTPS; localhost alone cannot receive GitHub webhooks. Details and smoke-test steps are in `backend/CODEMIND_SETUP.md`.
+
+The refresh is incremental at the file level: unchanged file checksums are skipped, changed/new source files are embedded with the existing pretrained embedding model, and removed source files are removed from the active code index. This does not retrain the embedding model.
+
+
+ https://estimate-hangover-reclusive.ngrok-free.dev

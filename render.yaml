@@ -1,0 +1,136 @@
+# Deployment template for Render. Configure external Qdrant Cloud and Neo4j Aura
+# values in the dashboard. Do not commit real API keys or webhook secrets.
+databases:
+  - name: memora-postgres
+    databaseName: enterprise_memory
+    user: memora_user
+
+services:
+  - type: keyvalue
+    name: memora-redis
+    plan: 256mb
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
+    ipAllowList: []
+
+  - type: web
+    name: memora-api
+    runtime: docker
+    region: singapore
+    plan: 2c-4g
+    autoDeployTrigger: checksPass
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    # Run schema migrations once before the API deployment; do not run concurrently from worker.
+    preDeployCommand: alembic upgrade head
+    envVars:
+      - key: APP_NAME
+        value: Memora AI
+      - key: APP_VERSION
+        value: 1.0.0
+      - key: DATABASE_URL
+        fromDatabase: { name: memora-postgres, property: connectionString }
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USER
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: QDRANT_PORT
+        value: "6333"
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: memora-redis, property: connectionString }
+      - key: REDIS_HOST
+        fromService: { type: keyvalue, name: memora-redis, property: host }
+      - key: REDIS_PORT
+        fromService: { type: keyvalue, name: memora-redis, property: port }
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "60"
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: EMBEDDING_MODEL
+        value: BAAI/bge-m3
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CODEMIND_GIT_HISTORY_DEPTH
+        value: "100"
+      - key: CODEMIND_GIT_HISTORY_LIMIT
+        value: "100"
+      - key: PROMETHEUS_ENABLED
+        value: "true"
+
+  - type: worker
+    name: memora-celery-worker
+    runtime: docker
+    region: singapore
+    plan: 2c-4g
+    autoDeployTrigger: checksPass
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    dockerCommand: celery -A app.workers.celery_app:celery_app worker --loglevel=INFO --pool=solo
+    envVars:
+      - key: APP_NAME
+        value: Memora AI
+      - key: APP_VERSION
+        value: 1.0.0
+      - key: DATABASE_URL
+        fromDatabase: { name: memora-postgres, property: connectionString }
+      - key: NEO4J_URI
+        fromService: { type: web, name: memora-api, envVarKey: NEO4J_URI }
+      - key: NEO4J_USER
+        fromService: { type: web, name: memora-api, envVarKey: NEO4J_USER }
+      - key: NEO4J_PASSWORD
+        fromService: { type: web, name: memora-api, envVarKey: NEO4J_PASSWORD }
+      - key: QDRANT_URL
+        fromService: { type: web, name: memora-api, envVarKey: QDRANT_URL }
+      - key: QDRANT_API_KEY
+        fromService: { type: web, name: memora-api, envVarKey: QDRANT_API_KEY }
+      - key: QDRANT_PORT
+        value: "6333"
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: memora-redis, property: connectionString }
+      - key: REDIS_HOST
+        fromService: { type: keyvalue, name: memora-redis, property: host }
+      - key: REDIS_PORT
+        fromService: { type: keyvalue, name: memora-redis, property: port }
+      - key: JWT_SECRET
+        fromService: { type: web, name: memora-api, envVarKey: JWT_SECRET }
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "60"
+      - key: EMBEDDING_MODEL
+        value: BAAI/bge-m3
+      - key: GITHUB_TOKEN
+        fromService: { type: web, name: memora-api, envVarKey: GITHUB_TOKEN }
+      - key: CODEMIND_GIT_HISTORY_DEPTH
+        value: "100"
+      - key: CODEMIND_GIT_HISTORY_LIMIT
+        value: "100"
+      - key: PROMETHEUS_ENABLED
+        value: "true"
+
+  - type: web
+    name: memora-frontend
+    runtime: static
+    autoDeployTrigger: checksPass
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false

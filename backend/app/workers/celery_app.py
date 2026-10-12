@@ -2,6 +2,8 @@ from celery import Celery
 
 from app.core.config import settings
 
+import app.workers.metrics  # registers Celery Prometheus metrics signals
+
 
 celery_app = Celery(
     "enterprise_memory_engine",

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import hashlib
-import hmac
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.auth.authorization import require_project_access
 from app.api.v1.auth.roles import require_admin, require_employee
+from app.connectors.git.github_webhook import (
+    payload_matches_repository,
+    verify_github_signature,
+)
 from app.core.config import settings
 from app.database.postgres import get_db
 from app.models.project import Project
@@ -71,8 +73,14 @@ def index_repository(repository_id: int, db: Session = Depends(get_db), current_
         result = CodeMindIndexingService(db).index_repository(repo)
         return {"status": "completed", **result}
     except ValueError as exc:
+        repo.index_status = "failed"
+        repo.last_index_error = str(exc)[:4000]
+        db.commit()
         raise HTTPException(400, str(exc))
     except Exception as exc:
+        repo.index_status = "failed"
+        repo.last_index_error = str(exc)[:4000]
+        db.commit()
         raise HTTPException(500, f"CodeMind indexing failed: {exc}")
 
 
@@ -136,17 +144,74 @@ def business_rule(project_id: int, data: BusinessRuleRequest, project: Project =
 
 @router.post("/webhook/github/{repository_id}")
 async def github_webhook(repository_id: int, request: Request, db: Session = Depends(get_db)):
-    if not settings.GITHUB_WEBHOOK_SECRET:
+    """Validate a GitHub push delivery and enqueue an incremental CodeMind refresh.
+
+    The endpoint is intentionally unauthenticated via user JWT because GitHub calls
+    it directly; authenticity is instead established by the per-hook HMAC secret.
+    The configured repository URL and branch are also checked before enqueueing.
+    """
+    secret = settings.GITHUB_WEBHOOK_SECRET
+    if not secret:
         raise HTTPException(503, "GitHub webhook secret is not configured")
+
     body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256", "")
-    expected = "sha256=" + hmac.new(settings.GITHUB_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(signature, expected):
+    if not verify_github_signature(body, signature, secret):
         raise HTTPException(401, "Invalid webhook signature")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(400, "Webhook body must be valid JSON")
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "Webhook JSON root must be an object")
+
     from app.models.code_repository import CodeRepository
     repo = db.get(CodeRepository, repository_id)
     if repo is None or repo.status != "active" or repo.provider != "github":
-        raise HTTPException(404, "GitHub repository not found")
+        raise HTTPException(404, "Active GitHub repository not found")
+
+    payload_repository = payload.get("repository") or {}
+    if not isinstance(payload_repository, dict) or not payload_matches_repository(repo.remote_url, payload_repository):
+        raise HTTPException(403, "Webhook repository does not match the configured repository")
+
+    event = request.headers.get("X-GitHub-Event", "")
+    if event == "ping":
+        return {"status": "received", "repository_id": repo.id, "message": "Webhook secret and repository verified."}
+    if event != "push":
+        return {"status": "ignored", "repository_id": repo.id, "reason": "unsupported_event"}
+
+    expected_ref = f"refs/heads/{repo.default_branch}"
+    if payload.get("ref") != expected_ref:
+        return {
+            "status": "ignored",
+            "repository_id": repo.id,
+            "reason": "branch_not_configured",
+            "expected_ref": expected_ref,
+            "received_ref": payload.get("ref"),
+        }
+    if payload.get("deleted") or not payload.get("after") or set(payload.get("after", "")) == {"0"}:
+        return {"status": "ignored", "repository_id": repo.id, "reason": "branch_deleted_or_empty"}
+
+    # Persist pending state before dispatch so the worker can't race with a later
+    # status commit from this request.
+    repo.index_status = "pending"
+    repo.last_index_error = None
+    db.commit()
+
     from app.workers.tasks import codemind_index_repository_task
-    task = codemind_index_repository_task.delay(repository_id)
-    return {"status": "queued", "task_id": task.id, "repository_id": repository_id}
+    try:
+        task = codemind_index_repository_task.delay(repository_id)
+    except Exception as exc:
+        repo.index_status = "failed"
+        repo.last_index_error = f"Unable to enqueue GitHub update: {str(exc)[:3500]}"
+        db.commit()
+        raise HTTPException(503, "Unable to queue repository indexing; check the Celery worker/broker.")
+
+    return {
+        "status": "queued",
+        "task_id": task.id,
+        "repository_id": repo.id,
+        "commit": payload.get("after"),
+        "message": "Repository refresh queued. Changed files are re-indexed; the embedding model is not retrained.",
+    }

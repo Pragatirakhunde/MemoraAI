@@ -224,7 +224,9 @@ class CodeMindIndexingService:
                     deleted_count += 1
             self.db.commit()
 
-            self._index_git_history(repository)
+            history_stats = self._index_git_history(
+                repository, limit=settings.CODEMIND_GIT_HISTORY_LIMIT
+            )
             CodeGraphService.rebuild_calls(repository.id, repository.organization_id, repository.project_id)
 
             repository.index_status = "completed"
@@ -239,6 +241,7 @@ class CodeMindIndexingService:
                 "files_deleted": deleted_count,
                 "symbols": symbols_count,
                 "chunks": chunks_count,
+                **history_stats,
             }
         except Exception as exc:
             self.db.rollback()
@@ -247,49 +250,126 @@ class CodeMindIndexingService:
             self.db.commit()
             raise
 
-    def _index_git_history(self, repository: CodeRepository, limit: int = 100) -> None:
+    def _index_git_history(self, repository: CodeRepository, limit: int = 100) -> dict[str, int]:
+        """Persist the most recent commits and their changed-file statistics.
+
+        Git history is metadata only: refreshing it does not train or fine-tune
+        the embedding model. File embeddings are upserted only for changed files
+        in ``index_repository`` above.
+        """
         root = Path(repository.local_path).expanduser().resolve()
         if not (root / ".git").exists():
-            return
+            return {"commits_scanned": 0, "commits_added": 0, "commits_updated": 0}
+
+        safe_limit = max(1, min(int(limit), 5000))
         try:
             output = subprocess.run(
-                ["git", "-C", str(root), "log", f"-n{limit}", "--date=iso-strict",
+                ["git", "-C", str(root), "log", f"-n{safe_limit}", "--date=iso-strict",
                  "--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%s"],
                 check=True, capture_output=True, text=True,
             ).stdout
-        except (OSError, subprocess.CalledProcessError):
-            return
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise ValueError(f"Unable to read Git commit history: {exc}") from exc
+
+        added = updated = scanned = 0
         for line in output.splitlines():
-            parts = line.split("", 4)
+            parts = line.split("\x1f", 4)
             if len(parts) != 5:
                 continue
             sha, author, email, committed_at, message = parts
-            if self.db.scalar(select(CodeCommit).where(
-                CodeCommit.repository_id == repository.id,
-                CodeCommit.sha == sha,
-            )):
-                continue
-            changed = []
+            scanned += 1
+
             try:
-                stat = subprocess.run(
-                    ["git", "-C", str(root), "show", "--format=", "--name-status", sha],
+                status_output = subprocess.run(
+                    ["git", "-C", str(root), "diff-tree", "--root", "--no-commit-id",
+                     "--name-status", "-r", "--no-renames", sha],
                     check=True, capture_output=True, text=True,
                 ).stdout
-                for row in stat.splitlines():
-                    parts2 = row.split("	", 1)
-                    if len(parts2) == 2:
-                        changed.append({"status": parts2[0], "path": parts2[1]})
-            except (OSError, subprocess.CalledProcessError):
-                pass
-            self.db.add(CodeCommit(
-                organization_id=repository.organization_id,
-                project_id=repository.project_id,
-                repository_id=repository.id,
-                sha=sha,
-                author_name=author,
-                author_email=email,
-                committed_at=datetime.fromisoformat(committed_at.replace("Z", "+00:00")).replace(tzinfo=None),
-                message=message,
-                changed_files=changed,
+                numstat_output = subprocess.run(
+                    ["git", "-C", str(root), "show", "--format=", "--numstat", "--no-renames", sha],
+                    check=True, capture_output=True, text=True,
+                ).stdout
+            except (OSError, subprocess.CalledProcessError) as exc:
+                raise ValueError(f"Unable to read changed files for commit {sha[:10]}: {exc}") from exc
+
+            changes_by_path: dict[str, dict] = {}
+            for row in status_output.splitlines():
+                fields = row.split("\t", 1)
+                if len(fields) == 2:
+                    changes_by_path[fields[1]] = {
+                        "status": fields[0], "path": fields[1],
+                        "additions": 0, "deletions": 0,
+                    }
+
+            additions_total = deletions_total = 0
+            for row in numstat_output.splitlines():
+                fields = row.split("\t", 2)
+                if len(fields) != 3:
+                    continue
+                add_text, delete_text, path = fields
+                # Binary files use '-' instead of numeric line counts.
+                try:
+                    additions = int(add_text)
+                    deletions = int(delete_text)
+                except ValueError:
+                    additions = deletions = 0
+                additions_total += additions
+                deletions_total += deletions
+                if path in changes_by_path:
+                    changes_by_path[path]["additions"] = additions
+                    changes_by_path[path]["deletions"] = deletions
+                else:
+                    changes_by_path[path] = {
+                        "status": "M", "path": path,
+                        "additions": additions, "deletions": deletions,
+                    }
+
+            changed_files = list(changes_by_path.values())
+            committed_at_value = datetime.fromisoformat(
+                committed_at.replace("Z", "+00:00")
+            ).replace(tzinfo=None)
+
+            existing = self.db.scalar(select(CodeCommit).where(
+                CodeCommit.repository_id == repository.id,
+                CodeCommit.sha == sha,
             ))
+            if existing is None:
+                existing = CodeCommit(
+                    organization_id=repository.organization_id,
+                    project_id=repository.project_id,
+                    repository_id=repository.id,
+                    sha=sha,
+                    author_name=author,
+                    author_email=email,
+                    committed_at=committed_at_value,
+                    message=message,
+                    changed_files=changed_files,
+                    additions=additions_total,
+                    deletions=deletions_total,
+                )
+                self.db.add(existing)
+                added += 1
+            else:
+                # Backfill stats for commits previously indexed by an older build,
+                # but avoid reporting every unchanged commit as updated on each sync.
+                changed_record = any((
+                    existing.author_name != author,
+                    existing.author_email != email,
+                    existing.committed_at != committed_at_value,
+                    existing.message != message,
+                    existing.changed_files != changed_files,
+                    existing.additions != additions_total,
+                    existing.deletions != deletions_total,
+                ))
+                if changed_record:
+                    existing.author_name = author
+                    existing.author_email = email
+                    existing.committed_at = committed_at_value
+                    existing.message = message
+                    existing.changed_files = changed_files
+                    existing.additions = additions_total
+                    existing.deletions = deletions_total
+                    updated += 1
+
         self.db.commit()
+        return {"commits_scanned": scanned, "commits_added": added, "commits_updated": updated}

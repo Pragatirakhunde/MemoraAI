@@ -27,6 +27,13 @@ You are CodeMind inside Memora AI.
 Use only the retrieved code context for the authorized project below.
 Do not invent files, functions, APIs, architecture, or behavior.
 When evidence is insufficient, say so explicitly.
+Format the answer using valid Markdown for readability:
+- Start with the direct answer.
+- Use short paragraphs and meaningful headings when there are multiple sections.
+- Use bullets for related points and numbered lists for procedures.
+- Use **bold** for important concepts, and inline backticks for file paths, symbols, APIs, and identifiers.
+- Use fenced, language-labelled code blocks only when showing multi-line code.
+- Do not invent source paths or line numbers. No raw HTML or decorative ASCII layouts.
 
 PROJECT_ID: {project_id}
 ARCHITECTURE: {architecture}
@@ -37,7 +44,7 @@ RETRIEVED CODE:
 QUESTION:
 {query}
 
-Give a direct technical answer. Mention exact file paths and symbols when present.
+Give a direct, well-structured technical answer. Mention exact file paths and symbols when present.
 """.strip()
         answer = LLMService().generate(prompt)
         references = [

@@ -32,6 +32,8 @@ import type {
     Conversation,
 } from "../../services/api/conversation";
 
+import MarkdownContent from "../../components/common/MarkdownContent";
+
 
 interface ChatMessage {
     role: "user" | "assistant";
@@ -608,9 +610,13 @@ export default function Chat() {
                                         }`}
                                     >
 
-                                        <div className="whitespace-pre-wrap text-sm leading-6">
-                                            {message.content}
-                                        </div>
+                                        {message.role === "assistant" ? (
+                                            <MarkdownContent content={message.content} />
+                                        ) : (
+                                            <div className="whitespace-pre-wrap text-sm leading-6">
+                                                {message.content}
+                                            </div>
+                                        )}
 
 
                                         {/* =================================================

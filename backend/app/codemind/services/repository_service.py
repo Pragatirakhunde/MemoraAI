@@ -52,6 +52,8 @@ class CodeRepositoryService:
 
     @staticmethod
     def sync_provider(repository: CodeRepository) -> None:
+        if repository.status != "active":
+            raise ValueError("Archived code repositories cannot be synchronized.")
         if repository.provider != "github":
             return
         connector = GitRepositoryConnector(

@@ -1,0 +1,103 @@
+## Terminal 1 — Start existing Docker services
+
+```
+docker start eme-postgres eme-neo4j eme-qdrant eme-redis
+docker ps
+```
+
+## Terminal 2 — Start FastAPI backend
+
+```
+cd "C:\Sem5-(TY)\memoraAi\memora_final_project\backend"
+
+.\.venv\Scripts\Activate.ps1
+$env:PYTHONPATH = (Get-Location).Path
+
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## Terminal 3 — Start Celery worker
+
+```
+cd "C:\Sem5-(TY)\memoraAi\memora_final_project\backend"
+
+.\.venv\Scripts\Activate.ps1
+$env:PYTHONPATH = (Get-Location).Path
+
+celery -A app.workers.celery_app:celery_app worker --loglevel=INFO --pool=solo
+```
+
+## Terminal 4 — Start Celery Beat
+
+```
+cd "C:\Sem5-(TY)\memoraAi\memora_final_project\backend"
+
+.\.venv\Scripts\Activate.ps1
+$env:PYTHONPATH = (Get-Location).Path
+
+celery -A app.workers.celery_app:celery_app beat --loglevel=INFO
+```
+
+## Terminal 5 — Start React frontend
+
+```
+cd "C:\Sem5-(TY)\memoraAi\memora_final_project\frontend"
+
+npm run dev -- --host 0.0.0.0
+```
+
+## Terminal 6 — Install and start Grafana dashboard
+
+Download this monitoring package and place it in your project root.
+
+Download Memora Grafana Monitoring Pack
+
+Then run:
+
+```
+cd "C:\Sem5-(TY)\memoraAi\memora_final_project"
+
+Expand-Archive `
+  -LiteralPath "$env:USERPROFILE\Downloads\Memora_Grafana_Monitoring_Pack.zip" `
+  -DestinationPath "." `
+  -Force
+
+docker compose -f monitoring-compose.yml up -d
+
+docker compose -f monitoring-compose.yml ps
+```
+
+If the ZIP was saved somewhere other than Downloads, change the ZIP path accordingly.
+
+## Open the application and dashboards
+
+Memora application
+
+React frontend
+
+[Open](http://localhost:5173)
+
+Grafana
+
+Login: `admin` · Password: `MemoraGrafana@2026`
+
+[Open](http://localhost:3001)
+
+Prometheus
+
+Metrics collection
+
+[Open](http://localhost:9090)
+
+FastAPI docs
+
+API documentation
+
+[Open](http://127.0.0.1:8000/docs)
+
+In Grafana, open Dashboards → Memora → Memora MVP Overview. The dashboard is provisioned automatically and tracks API/frontend availability, API response-probe duration, HTTP status, and TCP reachability for PostgreSQL, Neo4j, Qdrant and Redis.
+
+Change the initial Grafana password after logging in. This is a basic infrastructure/availability dashboard; detailed application metrics such as request counts, AI latency and Celery queue depth require additional instrumentation in the application.
+
+Terminal 7: Ngork 
+Run to connect with github access : ngrok command: ngrok http 8000 

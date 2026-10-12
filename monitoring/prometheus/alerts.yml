@@ -1,0 +1,38 @@
+groups:
+  - name: memora-availability
+    rules:
+      - alert: MemoraApiDown
+        expr: up{job="memora-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Memora API scrape target is down
+          description: Prometheus cannot scrape the Memora API /metrics endpoint for 2 minutes.
+
+      - alert: MemoraCeleryWorkerDown
+        expr: up{job="memora-celery-worker"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Memora Celery worker metrics endpoint is down
+          description: Prometheus cannot scrape the Celery worker metrics port for 2 minutes.
+
+      - alert: MemoraHighHttp5xxRate
+        expr: sum(rate(memora_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(memora_http_requests_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Memora API 5xx rate exceeds 5 percent
+          description: More than 5 percent of HTTP responses have been 5xx errors for 5 minutes.
+
+      - alert: MemoraCodeMindIndexFailures
+        expr: increase(memora_celery_tasks_total{task_name="app.workers.tasks.codemind_index_repository_task",state="failure"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: A CodeMind repository indexing task failed
+          description: Inspect the Celery worker log and the repository's last_index_error field.

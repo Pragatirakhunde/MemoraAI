@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     HOST: str = "0.0.0.0"
     PORT: int = 8000
+    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     POSTGRES_HOST: str
     POSTGRES_PORT: int = 5432
@@ -18,12 +19,17 @@ class Settings(BaseSettings):
     NEO4J_USER: str
     NEO4J_PASSWORD: str
 
-    QDRANT_HOST: str
+    QDRANT_URL: str = ""
+    QDRANT_API_KEY: str = ""
+
+    QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
 
     REDIS_HOST: str
     REDIS_PORT: int = 6379
+    PROMETHEUS_ENABLED: bool = True
+    CELERY_METRICS_PORT: int = 9808
 
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
@@ -38,6 +44,9 @@ class Settings(BaseSettings):
     CODEMIND_QDRANT_COLLECTION: str = "codemind_code_chunks"
     CODEMIND_MAX_FILE_SIZE_MB: int = 5
     GITHUB_WEBHOOK_SECRET: str = ""
+    GITHUB_TOKEN: str = ""
+    CODEMIND_GIT_HISTORY_DEPTH: int = 100
+    CODEMIND_GIT_HISTORY_LIMIT: int = 100
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -45,3 +45,9 @@ class CodeSearchRequest(BaseModel):
 class BusinessRuleRequest(BaseModel):
     rule: str = Field(min_length=3, max_length=3000)
     limit: int = Field(default=8, ge=1, le=20)
+
+
+class CodeExplainRequest(BaseModel):
+    query: str = Field(min_length=2, max_length=2000)
+    candidate_rank: int = Field(default=1, ge=1, le=10)
+    num_samples: int = Field(default=60, ge=30, le=100)

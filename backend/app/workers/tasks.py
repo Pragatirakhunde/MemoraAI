@@ -197,10 +197,29 @@ def codemind_index_repository_task(repository_id: int):
     try:
         repository = db.get(CodeRepository, repository_id)
         if repository is None:
-            return {"status": "failed", "message": "Repository not found"}
+            raise ValueError("CodeMind repository not found")
+        if repository.status != "active":
+            raise ValueError("Archived CodeMind repositories cannot be refreshed")
+        repository.index_status = "running"
+        repository.last_index_error = None
+        db.commit()
         CodeRepositoryService.sync_provider(repository)
-        return {"status": "completed", **CodeMindIndexingService(db).index_repository(repository)}
+        result = CodeMindIndexingService(db).index_repository(repository)
+        return {"status": "completed", **result}
     except Exception as exc:
-        return {"status": "failed", "message": str(exc)}
+        # Provider synchronization can fail before the indexing service marks the
+        # row itself failed. Persist an explicit failure state for the Admin UI.
+        try:
+            from app.models.code_repository import CodeRepository
+            repository = db.get(CodeRepository, repository_id)
+            if repository is not None:
+                repository.index_status = "failed"
+                repository.last_index_error = str(exc)[:4000]
+                db.commit()
+        except Exception:
+            db.rollback()
+        # Propagate the failure so Celery records a failed task, not a successful
+        # task whose return value merely says "failed".
+        raise
     finally:
         db.close()

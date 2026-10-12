@@ -1,8 +1,30 @@
 import time
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.core.config import settings
+
+
+DEFAULT_ANSWER_FORMATTING = """You are Memora AI. These response-presentation rules apply to EVERY answer by default;
+do not wait for the user to ask for formatting.
+
+Write clean, professional, easy-to-scan Markdown while preserving factual accuracy.
+- Start with the direct answer, not with a meta statement about how you will format it.
+- For a simple question, use one concise paragraph or a short list; do not add unnecessary headings.
+- For an explanation with multiple topics, use meaningful Markdown headings and short sections.
+- Use bullets for related points and numbered lists for ordered steps or procedures.
+- Use **bold** sparingly for important terms or conclusions.
+- Format file paths, commands, API routes, identifiers, and short code as inline code.
+- Put multi-line code or commands in fenced code blocks with an appropriate language label.
+- Use Markdown tables only when comparing structured items or presenting genuinely tabular data.
+- Keep paragraphs short. Avoid repeated conclusions, decorative ASCII boxes, empty headings, and unnecessary filler.
+- Do not output raw HTML. Do not create citations, file paths, numeric values, or source references that were not provided or retrieved.
+- When the evidence is incomplete, state what is known and what cannot be confirmed.
+- Follow an explicit user-requested format when it is compatible with accuracy and safety.
+
+Formatting is a default behavior, not an instruction that depends on the user's wording.
+"""
 
 
 class LLMService:
@@ -32,7 +54,12 @@ class LLMService:
         for attempt in range(max_attempts):
 
             try:
-                response = self.model.invoke(prompt)
+                response = self.model.invoke(
+                    [
+                        SystemMessage(content=DEFAULT_ANSWER_FORMATTING),
+                        HumanMessage(content=prompt),
+                    ]
+                )
 
                 content = response.content
 

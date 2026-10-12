@@ -41,6 +41,7 @@ class CodeMindAnalysisService:
         return [{
             "sha": r.sha, "author_name": r.author_name, "author_email": r.author_email,
             "committed_at": r.committed_at, "message": r.message, "changed_files": r.changed_files,
+            "additions": r.additions, "deletions": r.deletions,
         } for r in rows]
 
     @staticmethod

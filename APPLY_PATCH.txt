@@ -1,0 +1,13 @@
+Memora combined GitSync + AI formatting + MLOps patch
+
+Overlay these files onto the root of your existing Memora project. Stop FastAPI/Celery while copying files. Preserve actual .env files, local databases, .venv, node_modules, and existing Docker containers.
+
+Features:
+- GitHub webhook verification and queued incremental CodeMind indexing (requires a GitHub-backed repository record).
+- Git commit history metadata and checksum-aware indexing.
+- Clean Markdown rendering for AI Assistant and CodeMind.
+- Prometheus API/worker metrics and Grafana dashboard/alerts for local development.
+- SHAP/LIME retrieval relevance explanation for CodeMind BGE-M3 similarities.
+- Dockerfiles, CI workflow and Render deployment starter blueprint.
+
+Deployment is not performed by this patch. See docs/06_Deployment/MLOps_Implementation.md and MLOPS_PATCH_NOTES.md.

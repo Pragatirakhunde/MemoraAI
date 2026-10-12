@@ -64,3 +64,9 @@ export const getImpact = async (projectId: number, symbolId: number) =>
 
 export const businessRule = async (projectId: number, rule: string, limit = 8) =>
     (await api.post(`/codemind/projects/${projectId}/business-rule`, { rule, limit })).data;
+
+
+export const explainCodeRelevance = async (projectId: number, query: string, candidateRank = 1, numSamples = 60) =>
+    (await api.post(`/codemind/projects/${projectId}/explain-relevance`, {
+        query, candidate_rank: candidateRank, num_samples: numSamples,
+    })).data;
